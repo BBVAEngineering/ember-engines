@@ -204,7 +204,22 @@ Router.reopen({
 
     // We already have a Promise for this engine instance
     if (enginePromise) {
-      return enginePromise;
+      return enginePromise
+        .catch((bundleError) => {
+          // Delete engine cache.
+          delete enginePromises[name][instanceId];
+          // Delete bundle loader cache.
+          enginePromise = bundleError.retryLoad();
+
+          return enginePromise.then(
+            () => {
+              // If bundle has been successfully loaded then retry engine construction.
+              return this._loadEngineInstance({ name, instanceId, mountPoint });
+            },
+            // If error, set bundleError promise as cached promise.
+            () => enginePromises[name][instanceId] = enginePromise
+          );
+        });
     }
 
     if (this._engineIsLoaded(name)) {
