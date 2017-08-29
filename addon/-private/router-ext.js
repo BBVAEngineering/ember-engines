@@ -204,22 +204,7 @@ Router.reopen({
 
     // We already have a Promise for this engine instance
     if (enginePromise) {
-      return enginePromise
-        .catch((bundleError) => {
-          // Delete engine cache.
-          delete enginePromises[name][instanceId];
-          // Delete bundle loader cache.
-          enginePromise = bundleError.retryLoad();
-
-          return enginePromise.then(
-            () => {
-              // If bundle has been successfully loaded then retry engine construction.
-              return this._loadEngineInstance({ name, instanceId, mountPoint });
-            },
-            // If error, set bundleError promise as cached promise.
-            () => enginePromises[name][instanceId] = enginePromise
-          );
-        });
+      return enginePromise.catch((error) => this._retryLoadEngineInstance(error, { name, instanceId, mountPoint }));
     }
 
     if (this._engineIsLoaded(name)) {
@@ -233,6 +218,36 @@ Router.reopen({
     return enginePromises[name][instanceId] = enginePromise.then(() => {
       return this._constructEngineInstance({ name, instanceId, mountPoint });
     });
+  },
+
+  /**
+   * Retries to load an instance of an Engine given the load error and the specified name and instanceId.
+   *
+   * @private
+   * @method _retryLoadEngineInstance
+   * @param {Object} error
+   * @param {Object} engineInfo
+   * @param {String} engineInfo.name
+   * @param {String} engineInfo.instanceId
+   * @param {String} engineInfo.mountPoint
+   * @return {Promise}
+   */
+  _retryLoadEngineInstance(error, { name, instanceId, mountPoint }) {
+    let enginePromises = this._enginePromises;
+
+    // Delete engine cache.
+    delete enginePromises[name][instanceId];
+    // Delete bundle loader cache.
+    let enginePromise = error.retryLoad();
+
+    return enginePromise.then(
+      () => {
+        // If bundle has been successfully loaded then retry engine construction.
+        return this._loadEngineInstance({ name, instanceId, mountPoint });
+      },
+      // If error, set bundleError promise as cached promise.
+      () => enginePromises[name][instanceId] = enginePromise
+    );
   },
 
   /**
